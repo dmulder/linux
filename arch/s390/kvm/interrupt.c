@@ -20,7 +20,7 @@
 #include <linux/vmalloc.h>
 #include <asm/asm-offsets.h>
 #include <asm/dis.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <asm/sclp.h>
 #include <asm/isc.h>
 #include <asm/gmap.h>
@@ -415,7 +415,7 @@ static int __write_machine_check(struct kvm_vcpu *vcpu,
 	int rc;
 
 	mci.val = mchk->mcic;
-	/* take care of lazy register loading via vcpu load/put */
+	/* take care of lazy register loading */
 	save_fpu_regs();
 	save_access_regs(vcpu->run->s.regs.acrs);
 
