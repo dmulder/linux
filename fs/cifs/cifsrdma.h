@@ -120,6 +120,17 @@ struct smbd_negotiate_resp {
 	__le32 max_fragmented_size;
 } __packed;
 
+// SMBD data transfer packet with no payload [MS-SMBD] 2.2.3
+struct smbd_data_transfer_no_data {
+	__le16 credits_requested;
+	__le16 credits_granted;
+	__le16 flags;
+	__le16 reserved;
+	__le32 remaining_data_length;
+	__le32 data_offset;
+	__le32 data_length;
+} __packed;
+
 // SMBD data transfer packet with payload [MS-SMBD] 2.2.3
 struct smbd_data_transfer {
 	__le16 credits_requested;

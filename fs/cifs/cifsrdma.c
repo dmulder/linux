@@ -66,6 +66,7 @@ static int cifs_rdma_post_recv(
 		struct cifs_rdma_info *info,
 		struct cifs_rdma_response *response);
 
+static int cifs_rdma_post_send_empty(struct cifs_rdma_info *info);
 static int cifs_rdma_post_send_data(
 		struct cifs_rdma_info *info,
 		struct kvec *iov, int n_vec, int remaining_data_length);
@@ -666,6 +667,101 @@ dma_mapping_failed:
 					    request->sge[i].addr,
 					    request->sge[i].length,
 					    DMA_TO_DEVICE);
+	kfree(request->sge);
+
+allocate_sge_failed:
+	mempool_free(request, info->request_mempool);
+	return rc;
+}
+
+/*
+ * Send an empty message
+ * Empty message is used to extend credits to peer to for keep live
+ */
+static int cifs_rdma_post_send_empty(struct cifs_rdma_info *info)
+{
+	struct cifs_rdma_request *request;
+	struct smbd_data_transfer_no_data *packet;
+	struct ib_send_wr send_wr, *send_wr_fail;
+	int rc;
+	u16 credits_granted, flags=0;
+
+	request = mempool_alloc(info->request_mempool, GFP_KERNEL);
+	if (!request) {
+		log_rdma_send("failed to get send buffer for empty packet\n");
+		return -ENOMEM;
+	}
+
+	request->info = info;
+	packet = (struct smbd_data_transfer_no_data *) request->packet;
+
+	/* nothing to do? */
+	if (credits_granted==0 && flags==0) {
+		mempool_free(request, info->request_mempool);
+		log_keep_alive("nothing to do, not sending anything\n");
+		return 0;
+	}
+
+	packet->credits_requested = cpu_to_le16(info->send_credit_target);
+	packet->credits_granted = cpu_to_le16(credits_granted);
+	packet->flags = cpu_to_le16(flags);
+	packet->reserved = cpu_to_le16(0);
+	packet->remaining_data_length = cpu_to_le32(0);
+	packet->data_offset = cpu_to_le32(0);
+	packet->data_length = cpu_to_le32(0);
+
+	log_outgoing("credits_requested=%d credits_granted=%d data_offset=%d "
+		     "data_length=%d remaining_data_length=%d\n",
+		le16_to_cpu(packet->credits_requested),
+		le16_to_cpu(packet->credits_granted),
+		le32_to_cpu(packet->data_offset),
+		le32_to_cpu(packet->data_length),
+		le32_to_cpu(packet->remaining_data_length));
+
+	request->num_sge = 1;
+	request->sge = kzalloc(sizeof(struct ib_sge), GFP_KERNEL);
+	if (!request->sge) {
+		rc = -ENOMEM;
+		goto allocate_sge_failed;
+	}
+
+	request->sge[0].addr = ib_dma_map_single(info->id->device,
+				(void *)packet, sizeof(*packet), DMA_TO_DEVICE);
+	if(ib_dma_mapping_error(info->id->device, request->sge[0].addr)) {
+		rc = -EIO;
+		goto dma_mapping_failure;
+	}
+
+	request->sge[0].length = sizeof(*packet);
+	request->sge[0].lkey = info->pd->local_dma_lkey;
+	ib_dma_sync_single_for_device(info->id->device, request->sge[0].addr,
+				request->sge[0].length, DMA_TO_DEVICE);
+
+	wait_event(info->wait_send_queue, atomic_read(&info->send_credits) > 0);
+	atomic_dec(&info->send_credits);
+	info->count_send_empty++;
+	log_rdma_send("rdma_request sge addr=%llu legnth=%u lkey=%u\n",
+		request->sge[0].addr, request->sge[0].length,
+		request->sge[0].lkey);
+
+	request->cqe.done = send_done;
+
+	send_wr.next = NULL;
+	send_wr.wr_cqe = &request->cqe;
+	send_wr.sg_list = request->sge;
+	send_wr.num_sge = request->num_sge;
+	send_wr.opcode = IB_WR_SEND;
+	send_wr.send_flags = IB_SEND_SIGNALED;
+
+	rc = ib_post_send(info->id->qp, &send_wr, &send_wr_fail);
+	if (!rc)
+		return 0;
+
+	log_rdma_send("ib_post_send failed rc=%d\n", rc);
+	ib_dma_unmap_single(info->id->device, request->sge[0].addr,
+			    request->sge[0].length, DMA_TO_DEVICE);
+
+dma_mapping_failure:
 	kfree(request->sge);
 
 allocate_sge_failed:
