@@ -484,6 +484,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 		       mempool_free_slab, info->response_cache);
 
 	allocate_receive_buffers(info, info->receive_credit_max);
+	init_waitqueue_head(&info->wait_send_queue);
 out2:
 	rdma_destroy_id(info->id);
 

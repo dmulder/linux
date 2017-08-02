@@ -62,6 +62,8 @@ struct cifs_rdma_info {
 	struct list_head receive_queue;
 	spinlock_t receive_queue_lock;
 
+	wait_queue_head_t wait_send_queue;
+
 	// request pool for RDMA send
 	struct kmem_cache *request_cache;
 	mempool_t *request_mempool;
