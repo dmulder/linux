@@ -405,7 +405,11 @@ cifs_reconnect(struct TCP_Server_Info *server)
 
 		/* we should try only the port we connected to before */
 		mutex_lock(&server->srv_mutex);
-		rc = generic_ip_connect(server);
+		if (server->rdma)
+			rc = cifs_reconnect_rdma_session(server);
+		else
+			rc = generic_ip_connect(server);
+
 		if (rc) {
 			cifs_dbg(FYI, "reconnect error %d\n", rc);
 			mutex_unlock(&server->srv_mutex);
