@@ -36,6 +36,16 @@
 struct cifs_rdma_info {
 	struct TCP_Server_Info *server_info;
 
+	// RDMA related
+	struct rdma_cm_id *id;
+	struct ib_qp_init_attr qp_attr;
+	struct ib_pd *pd;
+	struct ib_cq *cq;
+	struct ib_device_attr dev_attr;
+	int connect_state;
+	int ri_rc;
+	struct completion ri_done;
+
 	//connection paramters
 	int receive_credit_max;
 	int send_credit_target;
@@ -55,4 +65,8 @@ struct cifs_rdma_info {
 	unsigned int count_put_receive_buffer;
 	unsigned int count_send_empty;
 };
+
+// Create a SMBDirect session
+struct cifs_rdma_info* cifs_create_rdma_session(
+	struct TCP_Server_Info *server, struct sockaddr *dstaddr);
 #endif
