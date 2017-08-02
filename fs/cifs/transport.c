@@ -37,6 +37,7 @@
 #include "cifsglob.h"
 #include "cifsproto.h"
 #include "cifs_debug.h"
+#include "cifsrdma.h"
 
 void
 cifs_wake_up_task(struct mid_q_entry *mid)
@@ -230,6 +231,11 @@ __smb_send_rqst(struct TCP_Server_Info *server, struct smb_rqst *rqst)
 	struct msghdr smb_msg;
 	int val = 1;
 
+       if(server->rdma_ses) {
+               rc = cifs_rdma_write(server->rdma_ses, rqst);
+               goto done;
+       }
+
 	if (ssocket == NULL)
 		return -ENOTSOCK;
 
@@ -299,6 +305,7 @@ uncork:
 		server->tcpStatus = CifsNeedReconnect;
 	}
 
+done:
 	if (rc < 0 && rc != -EINTR)
 		cifs_dbg(VFS, "Error %d sending data on socket to server\n",
 			 rc);
