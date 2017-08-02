@@ -73,6 +73,9 @@ struct cifs_rdma_info {
 	atomic_t receive_credits;
 	atomic_t receive_credit_target;
 
+	atomic_t send_pending;
+	wait_queue_head_t wait_send_pending;
+
 	atomic_t recv_pending;
 	wait_queue_head_t wait_recv_pending;
 
@@ -195,4 +198,6 @@ struct cifs_rdma_response {
 // Create a SMBDirect session
 struct cifs_rdma_info* cifs_create_rdma_session(
 	struct TCP_Server_Info *server, struct sockaddr *dstaddr);
+
+int cifs_rdma_write(struct cifs_rdma_info *rdma, struct smb_rqst *rqst);
 #endif
