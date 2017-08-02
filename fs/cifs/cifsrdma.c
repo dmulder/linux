@@ -459,6 +459,18 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 
 	log_rdma_event("rdma_connect connected\n");
 
+	sprintf(cache_name, "cifs_smbd_request_%p", info);
+	info->request_cache =
+		kmem_cache_create(
+			cache_name,
+			sizeof(struct cifs_rdma_request) +
+				sizeof(struct smbd_data_transfer),
+			0, SLAB_HWCACHE_ALIGN, NULL);
+
+	info->request_mempool =
+		mempool_create(info->send_credit_target, mempool_alloc_slab,
+			mempool_free_slab, info->request_cache);
+
 	sprintf(cache_name, "cifs_smbd_response_%p", info);
 	info->response_cache =
 		kmem_cache_create(

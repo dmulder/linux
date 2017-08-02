@@ -62,6 +62,10 @@ struct cifs_rdma_info {
 	struct list_head receive_queue;
 	spinlock_t receive_queue_lock;
 
+	// request pool for RDMA send
+	struct kmem_cache *request_cache;
+	mempool_t *request_mempool;
+
 	// response pool for RDMA receive
 	struct kmem_cache *response_cache;
 	mempool_t *response_mempool;
@@ -92,6 +96,21 @@ struct smbd_data_transfer {
 	__le32 padding;
 	char buffer[0];
 } __packed;
+
+// The context for a SMBD request
+struct cifs_rdma_request {
+	struct cifs_rdma_info *info;
+
+	// completion queue entry
+	struct ib_cqe cqe;
+
+	// the SGE entries for this packet
+	struct ib_sge *sge;
+	int num_sge;
+
+	// SMBD packet header follows this structure
+	char packet[0];
+};
 
 // The context for a SMBD response
 struct cifs_rdma_response {
