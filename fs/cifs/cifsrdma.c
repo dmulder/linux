@@ -202,6 +202,22 @@ static int cifs_rdma_process_disconnected(struct cifs_rdma_info *info)
 	return 0;
 }
 
+static void cifs_disconnect_rdma_work(struct work_struct *work)
+{
+	struct cifs_rdma_info *info =
+		container_of(work, struct cifs_rdma_info, disconnect_work);
+
+	if (info->transport_status == CIFS_RDMA_CONNECTED) {
+		info->transport_status = CIFS_RDMA_DISCONNECTING;
+		rdma_disconnect(info->id);
+	}
+}
+
+static void cifs_disconnect_rdma_session(struct cifs_rdma_info *info)
+{
+	schedule_work(&info->disconnect_work);
+}
+
 /* Upcall from RDMA CM */
 static int cifs_rdma_conn_upcall(
 		struct rdma_cm_id *id, struct rdma_cm_event *event)
@@ -264,6 +280,7 @@ cifs_rdma_qp_async_error_upcall(struct ib_event *event, void *context)
 	case IB_EVENT_QP_FATAL:
 	case IB_EVENT_QP_REQ_ERR:
 	case IB_EVENT_QP_ACCESS_ERR:
+		cifs_disconnect_rdma_session(info);
 
 	default:
 		break;
@@ -1494,6 +1511,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	init_waitqueue_head(&info->wait_recv_pending);
 	atomic_set(&info->recv_pending, 0);
 
+	INIT_WORK(&info->disconnect_work, cifs_disconnect_rdma_work);
 	INIT_WORK(&info->destroy_work, cifs_destroy_rdma_work);
 
 	rc = cifs_rdma_negotiate(info);

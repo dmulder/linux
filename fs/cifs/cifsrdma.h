@@ -68,6 +68,7 @@ struct cifs_rdma_info {
 	bool negotiate_done;
 
 	struct work_struct destroy_work;
+	struct work_struct disconnect_work;
 
 	//connection paramters
 	int receive_credit_max;
