@@ -212,6 +212,9 @@ struct cifs_rdma_response {
 struct cifs_rdma_info* cifs_create_rdma_session(
 	struct TCP_Server_Info *server, struct sockaddr *dstaddr);
 
+// Reconnect SMBDirect session
+int cifs_reconnect_rdma_session(struct TCP_Server_Info *server);
+
 // SMBDirect interface for carrying upper layer CIFS I/O
 int cifs_rdma_read(
 	struct cifs_rdma_info *rdma, char *buf, unsigned int to_read);

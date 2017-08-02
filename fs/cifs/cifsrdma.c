@@ -1170,6 +1170,30 @@ static void destroy_receive_buffers(struct cifs_rdma_info *info)
 		mempool_free(response, info->response_mempool);
 }
 
+int cifs_reconnect_rdma_session(struct TCP_Server_Info *server)
+{
+	log_rdma_event("reconnecting rdma session\n");
+
+	// why reconnect while it is still connected?
+	if (server->rdma_ses->transport_status == CIFS_RDMA_CONNECTED) {
+		log_rdma_event("still connected, not reconnecting\n");
+		return -EINVAL;
+	}
+
+	// wait until the transport is destroyed
+	while (server->rdma_ses->transport_status != CIFS_RDMA_DESTROYED)
+		msleep(1);
+
+	if (server->rdma_ses)
+		kfree(server->rdma_ses);
+
+	log_rdma_event("creating rdma session\n");
+	server->rdma_ses = cifs_create_rdma_session(
+		server, (struct sockaddr *) &server->dstaddr);
+
+	return server->rdma_ses ? 0 : -ENOENT;
+}
+
 struct cifs_rdma_info* cifs_create_rdma_session(
 	struct TCP_Server_Info *server, struct sockaddr *dstaddr)
 {
