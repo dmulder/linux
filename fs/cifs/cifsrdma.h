@@ -62,6 +62,7 @@ struct cifs_rdma_info {
 	int ri_rc;
 	struct completion ri_done;
 	wait_queue_head_t conn_wait;
+	wait_queue_head_t wait_destroy;
 
 	struct completion negotiate_completion;
 	bool negotiate_done;
@@ -228,6 +229,9 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 
 // Reconnect SMBDirect session
 int cifs_reconnect_rdma_session(struct TCP_Server_Info *server);
+
+// Destroy SMBDirect session
+void cifs_destroy_rdma_session(struct cifs_rdma_info *info);
 
 // SMBDirect interface for carrying upper layer CIFS I/O
 int cifs_rdma_read(

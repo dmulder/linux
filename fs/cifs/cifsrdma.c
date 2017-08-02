@@ -193,6 +193,7 @@ static void cifs_destroy_rdma_work(struct work_struct *work)
 	kmem_cache_destroy(info->response_cache);
 
 	info->transport_status = CIFS_RDMA_DESTROYED;
+	wake_up_all(&info->wait_destroy);
 }
 
 static int cifs_rdma_process_disconnected(struct cifs_rdma_info *info)
@@ -1315,6 +1316,22 @@ static void idle_connection_timer(struct work_struct *work)
 				info->keep_alive_interval*HZ);
 }
 
+void cifs_destroy_rdma_session(struct cifs_rdma_info *info)
+{
+	log_rdma_event("destroying rdma session\n");
+
+	// kick off the disconnection process
+	if (info->transport_status == CIFS_RDMA_CONNECTED)
+		rdma_disconnect(info->id);
+
+	info->server_info->tcpStatus = CifsExiting;
+
+	log_rdma_event("wait for transport being destroyed\n");
+	// wait until the transport is destroyed
+	wait_event(info->wait_destroy,
+		info->transport_status == CIFS_RDMA_DESTROYED);
+}
+
 int cifs_reconnect_rdma_session(struct TCP_Server_Info *server)
 {
 	log_rdma_event("reconnecting rdma session\n");
@@ -1423,6 +1440,8 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	conn_param.rnr_retry_count = 6;
 	conn_param.flow_control = 0;
 	init_waitqueue_head(&info->conn_wait);
+	init_waitqueue_head(&info->wait_destroy);
+
 	rc = rdma_connect(info->id, &conn_param);
 	if (rc) {
 		log_rdma_event("rdma_connect() failed with %i\n", rc);
@@ -1483,6 +1502,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 
 	// negotiation failed
 	log_rdma_event("cifs_rdma_negotiate rc=%d\n", rc);
+	cifs_destroy_rdma_session(info);
 
 out2:
 	rdma_destroy_id(info->id);
