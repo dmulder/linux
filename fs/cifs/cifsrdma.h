@@ -78,6 +78,21 @@ enum smbd_message_type {
 	SMBD_TRANSFER_DATA,
 };
 
+#define SMB_DIRECT_RESPONSE_REQUESTED 0x0001
+
+// SMBD data transfer packet with payload [MS-SMBD] 2.2.3
+struct smbd_data_transfer {
+	__le16 credits_requested;
+	__le16 credits_granted;
+	__le16 flags;
+	__le16 reserved;
+	__le32 remaining_data_length;
+	__le32 data_offset;
+	__le32 data_length;
+	__le32 padding;
+	char buffer[0];
+} __packed;
+
 // The context for a SMBD response
 struct cifs_rdma_response {
 	struct cifs_rdma_info *info;
