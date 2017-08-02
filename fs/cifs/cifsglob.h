@@ -580,6 +580,7 @@ inc_rfc1001_len(void *buf, int count)
 }
 
 struct TCP_Server_Info {
+	struct cifs_rdma_info *rdma_ses;
 	struct list_head tcp_ses_list;
 	struct list_head smb_ses_list;
 	int srv_count; /* reference counter */
