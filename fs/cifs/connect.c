@@ -704,6 +704,11 @@ static void clean_demultiplex_info(struct TCP_Server_Info *server)
 	/* give those requests time to exit */
 	msleep(125);
 
+       if (server->rdma && server->rdma_ses) {
+               cifs_destroy_rdma_session(server->rdma_ses);
+               server->rdma_ses = NULL;
+       }
+
 	if (server->ssocket) {
 		sock_release(server->ssocket);
 		server->ssocket = NULL;
@@ -2175,6 +2180,10 @@ cifs_put_tcp_session(struct TCP_Server_Info *server, int from_reconnect)
 		spin_unlock(&cifs_tcp_ses_lock);
 		return;
 	}
+
+       if (server->rdma && server->rdma_ses) {
+               cifs_destroy_rdma_session(server->rdma_ses);
+       }
 
 	put_net(cifs_net_ns(server));
 
