@@ -197,6 +197,31 @@ cifs_rdma_qp_async_error_upcall(struct ib_event *event, void *context)
 	}
 }
 
+/* Called in softirq, when a RDMA send is donea */
+static void send_done(struct ib_cq *cq, struct ib_wc *wc)
+{
+	int i;
+	struct cifs_rdma_request *request =
+		container_of(wc->wr_cqe, struct cifs_rdma_request, cqe);
+
+	log_rdma_send("cifs_rdma_request %p completed wc->status=%d\n",
+		request, wc->status);
+
+	if (wc->status != IB_WC_SUCCESS || wc->opcode != IB_WC_SEND) {
+		log_rdma_send("wc->status=%d wc->opcode=%d\n",
+			wc->status, wc->opcode);
+	}
+
+	for (i=0; i<request->num_sge; i++)
+		ib_dma_unmap_single(request->info->id->device,
+			request->sge[i].addr,
+			request->sge[i].length,
+			DMA_TO_DEVICE);
+
+	kfree(request->sge);
+	mempool_free(request, request->info->request_mempool);
+}
+
 /* Called from softirq, when recv is done */
 static void recv_done(struct ib_cq *cq, struct ib_wc *wc)
 {
