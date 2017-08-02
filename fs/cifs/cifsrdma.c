@@ -54,6 +54,20 @@
 
 #include "cifsrdma.h"
 
+/*
+ * Per RDMA transport connection parameters
+ * as defined in [MS-SMBD] 3.1.1.1
+ */
+static int receive_credit_max = 512;
+static int send_credit_target = 512;
+static int max_send_size = 8192;
+static int max_fragmented_recv_size = 1024*1024;
+static int max_receive_size = 8192;
+
+// maximum number of SGEs in a RDMA I/O
+static int max_send_sge = 16;
+static int max_recv_sge = 16;
+
 /* Logging functions
  * Logging are defined as classes. They can be ORed to define the actual
  * logging level via module parameter rdma_logging_class

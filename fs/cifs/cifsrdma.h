@@ -36,6 +36,19 @@
 struct cifs_rdma_info {
 	struct TCP_Server_Info *server_info;
 
+	//connection paramters
+	int receive_credit_max;
+	int send_credit_target;
+	int max_send_size;
+	int max_fragmented_recv_size;
+	int max_fragmented_send_size;
+	int max_receive_size;
+	int max_readwrite_size;
+	int protocol;
+	atomic_t send_credits;
+	atomic_t receive_credits;
+	atomic_t receive_credit_target;
+
 	// for debug purposes
 	unsigned int count_receive_buffer;
 	unsigned int count_get_receive_buffer;
