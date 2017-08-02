@@ -89,6 +89,7 @@ static int send_credit_target = 512;
 static int max_send_size = 8192;
 static int max_fragmented_recv_size = 1024*1024;
 static int max_receive_size = 8192;
+static int keep_alive_interval = 120;
 
 // maximum number of SGEs in a RDMA I/O
 static int max_send_sge = 16;
@@ -1200,6 +1201,25 @@ static void destroy_receive_buffers(struct cifs_rdma_info *info)
 		mempool_free(response, info->response_mempool);
 }
 
+// Implement idle connection timer [MS-SMBD] 3.1.6.2
+static void idle_connection_timer(struct work_struct *work)
+{
+	struct cifs_rdma_info *info = container_of(
+					work, struct cifs_rdma_info,
+					idle_timer_work.work);
+
+	if (info->keep_alive_requested != KEEP_ALIVE_NONE)
+		log_keep_alive("error status info->keep_alive_requested=%d\n",
+				info->keep_alive_requested);
+
+	log_keep_alive("about to send an empty idle message\n");
+	cifs_rdma_post_send_empty(info);
+
+	// setup the next idle timeout work
+	schedule_delayed_work(&info->idle_timer_work,
+				info->keep_alive_interval*HZ);
+}
+
 int cifs_reconnect_rdma_session(struct TCP_Server_Info *server)
 {
 	log_rdma_event("reconnecting rdma session\n");
@@ -1262,6 +1282,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	info->max_send_size = max_send_size;
 	info->max_fragmented_recv_size = max_fragmented_recv_size;
 	info->max_receive_size = max_receive_size;
+	info->keep_alive_interval = keep_alive_interval;
 
 	max_send_sge = min_t(int, max_send_sge,
 		info->id->device->attrs.max_sge);
@@ -1347,6 +1368,10 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	allocate_receive_buffers(info, info->receive_credit_max);
 	init_waitqueue_head(&info->wait_send_queue);
 	init_waitqueue_head(&info->wait_reassembly_queue);
+
+	INIT_DELAYED_WORK(&info->idle_timer_work, idle_connection_timer);
+	schedule_delayed_work(&info->idle_timer_work,
+		info->keep_alive_interval*HZ);
 
 	init_waitqueue_head(&info->wait_send_pending);
 	atomic_set(&info->send_pending, 0);

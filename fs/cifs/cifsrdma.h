@@ -73,6 +73,7 @@ struct cifs_rdma_info {
 	int max_fragmented_recv_size;
 	int max_fragmented_send_size;
 	int max_receive_size;
+	int keep_alive_interval;
 	int max_readwrite_size;
 	enum keep_alive_status keep_alive_requested;
 	int protocol;
@@ -101,11 +102,12 @@ struct cifs_rdma_info {
 
 	wait_queue_head_t wait_send_queue;
 
+	bool full_packet_received;
+	struct delayed_work idle_timer_work;;
+
 	// request pool for RDMA send
 	struct kmem_cache *request_cache;
 	mempool_t *request_mempool;
-
-	bool full_packet_received;
 
 	// response pool for RDMA receive
 	struct kmem_cache *response_cache;
