@@ -25,6 +25,15 @@
 #include <rdma/rdma_cm.h>
 #include <linux/mempool.h>
 
+enum cifs_rdma_transport_status {
+	CIFS_RDMA_CREATED,
+	CIFS_RDMA_CONNECTING,
+	CIFS_RDMA_CONNECTED,
+	CIFS_RDMA_DISCONNECTING,
+	CIFS_RDMA_DISCONNECTED,
+	CIFS_RDMA_DESTROYED
+};
+
 /*
  * The context for the SMBDirect transport
  * Everything related to the transport is here. It has several logical parts
@@ -35,6 +44,7 @@
  */
 struct cifs_rdma_info {
 	struct TCP_Server_Info *server_info;
+	enum cifs_rdma_transport_status transport_status;
 
 	// RDMA related
 	struct rdma_cm_id *id;
@@ -45,6 +55,7 @@ struct cifs_rdma_info {
 	int connect_state;
 	int ri_rc;
 	struct completion ri_done;
+	wait_queue_head_t conn_wait;
 
 	struct completion negotiate_completion;
 	bool negotiate_done;

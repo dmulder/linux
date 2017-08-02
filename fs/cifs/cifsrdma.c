@@ -173,9 +173,12 @@ static int cifs_rdma_conn_upcall(
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
 		log_rdma_event("connected event=%d\n", event->event);
 		info->connect_state = event->event;
+		info->transport_status = CIFS_RDMA_CONNECTED;
+		wake_up_all(&info->conn_wait);
 		break;
 
 	case RDMA_CM_EVENT_DISCONNECTED:
+		info->transport_status = CIFS_RDMA_DISCONNECTED;
 		break;
 
 	default:
@@ -581,6 +584,12 @@ static int cifs_rdma_post_send_page(struct cifs_rdma_info *info, struct page *pa
 	int rc = -ENOMEM;
 	int i;
 
+	// disconnected?
+	if (info->transport_status != CIFS_RDMA_CONNECTED) {
+		log_outgoing("disconnected not sending\n");
+		return -ENOENT;
+	}
+
 	request = mempool_alloc(info->request_mempool, GFP_KERNEL);
 	if (!request)
 		return rc;
@@ -686,6 +695,12 @@ static int cifs_rdma_post_send_empty(struct cifs_rdma_info *info)
 	int rc;
 	u16 credits_granted, flags=0;
 
+	// disconnected?
+	if (info->transport_status != CIFS_RDMA_CONNECTED) {
+		log_outgoing("disconnected not sending\n");
+		return -ENOENT;
+	}
+
 	request = mempool_alloc(info->request_mempool, GFP_KERNEL);
 	if (!request) {
 		log_rdma_send("failed to get send buffer for empty packet\n");
@@ -784,6 +799,12 @@ static int cifs_rdma_post_send_data(
 	struct ib_send_wr send_wr, *send_wr_fail;
 	int rc = -ENOMEM, i;
 	u32 data_length;
+
+	// disconnected?
+	if (info->transport_status != CIFS_RDMA_CONNECTED) {
+		log_outgoing("disconnected not sending\n");
+		return -ENOENT;
+	}
 
 	request = mempool_alloc(info->request_mempool, GFP_KERNEL);
 	if (!request)
@@ -1056,6 +1077,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 		return NULL;
 
 	info->server_info = server;
+	info->transport_status = CIFS_RDMA_CONNECTING;
 
 	rc = cifs_rdma_ia_open(info, dstaddr);
 	if (rc) {
@@ -1122,12 +1144,15 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	conn_param.retry_count = 6;
 	conn_param.rnr_retry_count = 6;
 	conn_param.flow_control = 0;
+	init_waitqueue_head(&info->conn_wait);
 	rc = rdma_connect(info->id, &conn_param);
 	if (rc) {
 		log_rdma_event("rdma_connect() failed with %i\n", rc);
 		goto out2;
 	}
 
+	wait_event_interruptible(
+		info->conn_wait, info->transport_status == CIFS_RDMA_CONNECTED);
 	if (info->connect_state != RDMA_CM_EVENT_ESTABLISHED)
 		goto out2;
 
