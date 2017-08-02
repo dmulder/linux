@@ -59,11 +59,42 @@ struct cifs_rdma_info {
 	atomic_t receive_credits;
 	atomic_t receive_credit_target;
 
+	// response pool for RDMA receive
+	struct kmem_cache *response_cache;
+	mempool_t *response_mempool;
+
 	// for debug purposes
 	unsigned int count_receive_buffer;
 	unsigned int count_get_receive_buffer;
 	unsigned int count_put_receive_buffer;
 	unsigned int count_send_empty;
+};
+
+enum smbd_message_type {
+	SMBD_NEGOTIATE_RESP,
+	SMBD_TRANSFER_DATA,
+};
+
+// The context for a SMBD response
+struct cifs_rdma_response {
+	struct cifs_rdma_info *info;
+
+	// completion queue entry
+	struct ib_cqe cqe;
+
+	// the SGE entry for the packet
+	struct ib_sge sge;
+
+	enum smbd_message_type type;
+
+	// link to receive queue or reassembly queue
+	struct list_head list;
+
+	// indicate if this is the 1st packet of a payload
+	bool first_segment;
+
+	// SMBD packet header and payload follows this structure
+	char packet[0];
 };
 
 // Create a SMBDirect session

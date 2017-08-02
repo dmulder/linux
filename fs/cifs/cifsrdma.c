@@ -287,6 +287,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	struct cifs_rdma_info *info;
 	struct rdma_conn_param conn_param;
 	struct ib_qp_init_attr qp_attr;
+	char cache_name[80];
 	int max_pending = receive_credit_max + send_credit_target;
 
 	info = kzalloc(sizeof(struct cifs_rdma_info), GFP_KERNEL);
@@ -370,6 +371,18 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 		goto out2;
 
 	log_rdma_event("rdma_connect connected\n");
+
+	sprintf(cache_name, "cifs_smbd_response_%p", info);
+	info->response_cache =
+		kmem_cache_create(
+			cache_name,
+			sizeof(struct cifs_rdma_response) +
+				info->max_receive_size,
+			0, SLAB_HWCACHE_ALIGN, NULL);
+
+	info->response_mempool =
+		mempool_create(info->receive_credit_max, mempool_alloc_slab,
+		       mempool_free_slab, info->response_cache);
 out2:
 	rdma_destroy_id(info->id);
 
