@@ -59,6 +59,9 @@ struct cifs_rdma_info {
 	atomic_t receive_credits;
 	atomic_t receive_credit_target;
 
+	struct list_head receive_queue;
+	spinlock_t receive_queue_lock;
+
 	// response pool for RDMA receive
 	struct kmem_cache *response_cache;
 	mempool_t *response_mempool;
