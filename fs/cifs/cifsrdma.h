@@ -82,6 +82,14 @@ struct cifs_rdma_info {
 	struct list_head receive_queue;
 	spinlock_t receive_queue_lock;
 
+	/* reassembly queue */
+	struct list_head reassembly_queue;
+	spinlock_t reassembly_queue_lock;
+	wait_queue_head_t wait_reassembly_queue;
+
+	// total data length of reassembly queue
+	atomic_t reassembly_data_length;
+
 	wait_queue_head_t wait_send_queue;
 
 	// request pool for RDMA send
@@ -98,6 +106,9 @@ struct cifs_rdma_info {
 	unsigned int count_receive_buffer;
 	unsigned int count_get_receive_buffer;
 	unsigned int count_put_receive_buffer;
+	unsigned int count_reassembly_queue;
+	unsigned int count_enqueue_reassembly_queue;
+	unsigned int count_dequeue_reassembly_queue;
 	unsigned int count_send_empty;
 };
 
