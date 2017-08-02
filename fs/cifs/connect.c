@@ -45,6 +45,7 @@
 #include <linux/parser.h>
 #include <linux/bvec.h>
 
+#include "cifsrdma.h"
 #include "cifspdu.h"
 #include "cifsglob.h"
 #include "cifsproto.h"
@@ -2275,12 +2276,26 @@ cifs_get_tcp_session(struct smb_vol *volume_info)
 	else
 		tcp_ses->echo_interval = SMB_ECHO_INTERVAL_DEFAULT * HZ;
 
-	rc = ip_connect(tcp_ses);
-	if (rc < 0) {
-		cifs_dbg(VFS, "Error connecting to socket. Aborting operation.\n");
-		goto out_err_crypto_release;
+	if (tcp_ses->rdma) {
+		tcp_ses->rdma_ses = cifs_create_rdma_session(tcp_ses, (struct sockaddr *)&volume_info->dstaddr);
+		if (tcp_ses->rdma_ses) {
+			cifs_dbg(VFS, "%s: RDMA transport established\n", __func__);
+			rc = 0;
+			goto connected;
+		}
+		else {
+			rc = -ENOENT;
+			goto out_err_crypto_release;
+		}
 	}
 
+        rc = ip_connect(tcp_ses);
+        if (rc < 0) {
+                cifs_dbg(VFS, "Error connecting to socket. Aborting operation.\n");
+                goto out_err_crypto_release;
+	}
+
+connected:
 	/*
 	 * since we're in a cifs function already, we know that
 	 * this will succeed. No need for try_module_get().
