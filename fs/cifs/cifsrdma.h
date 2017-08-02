@@ -25,6 +25,12 @@
 #include <rdma/rdma_cm.h>
 #include <linux/mempool.h>
 
+enum keep_alive_status {
+	KEEP_ALIVE_NONE,
+	KEEP_ALIVE_PENDING,
+	KEEP_ALIVE_SENT,
+};
+
 enum cifs_rdma_transport_status {
 	CIFS_RDMA_CREATED,
 	CIFS_RDMA_CONNECTING,
@@ -68,6 +74,7 @@ struct cifs_rdma_info {
 	int max_fragmented_send_size;
 	int max_receive_size;
 	int max_readwrite_size;
+	enum keep_alive_status keep_alive_requested;
 	int protocol;
 	atomic_t send_credits;
 	atomic_t receive_credits;
