@@ -1316,6 +1316,36 @@ out1:
 }
 
 /*
+ * Read a page from receive reassembly queue
+ * page: the page to read data into
+ * to_read: the length of data to read
+ * return value: actual data read
+ */
+int cifs_rdma_read_page(struct cifs_rdma_info *info,
+		struct page *page, unsigned int to_read)
+{
+	int ret;
+	char *to_address;
+
+	// make sure we have the page ready for read
+	wait_event(
+		info->wait_reassembly_queue,
+		atomic_read(&info->reassembly_data_length) >= to_read ||
+			info->transport_status != CIFS_RDMA_CONNECTED);
+
+	// now we can read from reassembly queue and not sleep
+	to_address = kmap_atomic(page);
+
+	log_cifs_read("reading from page=%p address=%p to_read=%d\n",
+		page, to_address, to_read);
+
+	ret = cifs_rdma_read(info, to_address, to_read);
+	kunmap_atomic(to_address);
+
+	return ret;
+}
+
+/*
  * Read data from receive reassembly queue
  * All the incoming data packets are placed in reassembly queue
  * buf: the buffer to read data into

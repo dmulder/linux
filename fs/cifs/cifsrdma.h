@@ -215,5 +215,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 // SMBDirect interface for carrying upper layer CIFS I/O
 int cifs_rdma_read(
 	struct cifs_rdma_info *rdma, char *buf, unsigned int to_read);
+int cifs_rdma_read_page(
+	struct cifs_rdma_info *rdma, struct page *page, unsigned int to_read);
 int cifs_rdma_write(struct cifs_rdma_info *rdma, struct smb_rqst *rqst);
 #endif
