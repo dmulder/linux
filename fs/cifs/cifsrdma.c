@@ -575,6 +575,46 @@ allocate_sge_failed:
 }
 
 /*
+ * Extend the credits to remote peer
+ * This implements [MS-SMBD] 3.1.5.9
+ * The idea is that we should extend credits to remote peer as quickly as
+ * it's allowed, to maintain data flow. We allocate as much as receive
+ * buffer as possible, and extend the receive credits to remote peer
+ * return value: the new credtis being granted.
+ */
+static int manage_credits_prior_sending(struct cifs_rdma_info *info)
+{
+	int ret = 0;
+	struct cifs_rdma_response *response;
+	int rc;
+
+	if (atomic_read(&info->receive_credit_target) >
+	    atomic_read(&info->receive_credits)) {
+		while (true) {
+			response = get_receive_buffer(info);
+			if (!response)
+				break;
+
+			response->type = SMBD_TRANSFER_DATA;
+			response->first_segment = false;
+			rc = cifs_rdma_post_recv(info, response);
+			if (rc) {
+				log_rdma_recv("post_recv failed rc=%d\n", rc);
+				put_receive_buffer(info, response);
+				break;
+			}
+
+			ret++;
+		}
+	}
+
+	atomic_add(ret, &info->receive_credits);
+	log_transport_credit(info);
+
+	return ret;
+}
+
+/*
  * Send a page
  * page: the page to send
  * offset: offset in the page to send
@@ -607,6 +647,8 @@ static int cifs_rdma_post_send_page(struct cifs_rdma_info *info, struct page *pa
 
 	packet = (struct smbd_data_transfer *) request->packet;
 	packet->credits_requested = cpu_to_le16(info->send_credit_target);
+	packet->credits_granted =
+		cpu_to_le16(manage_credits_prior_sending(info));
 	packet->flags = cpu_to_le16(0);
 
 	packet->reserved = cpu_to_le16(0);
@@ -718,6 +760,8 @@ static int cifs_rdma_post_send_empty(struct cifs_rdma_info *info)
 	request->info = info;
 	packet = (struct smbd_data_transfer_no_data *) request->packet;
 
+	credits_granted = manage_credits_prior_sending(info);
+
 	/* nothing to do? */
 	if (credits_granted==0 && flags==0) {
 		mempool_free(request, info->request_mempool);
@@ -827,6 +871,7 @@ static int cifs_rdma_post_send_data(
 
 	packet = (struct smbd_data_transfer *) request->packet;
 	packet->credits_requested = cpu_to_le16(info->send_credit_target);
+	packet->credits_granted = cpu_to_le16(manage_credits_prior_sending(info));
 	packet->flags = cpu_to_le16(0);
 	packet->reserved = cpu_to_le16(0);
 
