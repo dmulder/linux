@@ -100,10 +100,13 @@ struct cifs_rdma_info {
 	// the offset to first buffer in reassembly queue
 	int first_entry_offset;
 
+	bool send_immediate;
+
 	wait_queue_head_t wait_send_queue;
 
 	bool full_packet_received;
 	struct delayed_work idle_timer_work;;
+	struct delayed_work send_immediate_work;
 
 	// request pool for RDMA send
 	struct kmem_cache *request_cache;

@@ -318,6 +318,20 @@ static bool process_negotiation_response(struct cifs_rdma_response *response, in
 	return true;
 }
 
+/*
+ * Check and schedule to send an immediate packet
+ * This is used to extend credtis to remote peer to keep the transport busy
+ */
+static void check_and_send_immediate(struct cifs_rdma_info *info)
+{
+	info->send_immediate = true;
+
+	// promptly send a packet if running low on receive credits
+	if (atomic_read(&info->receive_credits) <
+	    atomic_read(&info->receive_credit_target) -1 )
+		schedule_delayed_work(&info->send_immediate_work, 0);
+}
+
 /* Called from softirq, when recv is done */
 static void recv_done(struct ib_cq *cq, struct ib_wc *wc)
 {
@@ -378,6 +392,8 @@ static void recv_done(struct ib_cq *cq, struct ib_wc *wc)
 				le16_to_cpu(SMB_DIRECT_RESPONSE_REQUESTED)) {
 			info->keep_alive_requested = KEEP_ALIVE_PENDING;
 		}
+
+		check_and_send_immediate(info);
 
 		// process receive queue
 		if (le32_to_cpu(data_transfer->data_length)) {
@@ -629,6 +645,9 @@ static int manage_credits_prior_sending(struct cifs_rdma_info *info)
 
 	atomic_add(ret, &info->receive_credits);
 	log_transport_credit(info);
+
+	if (ret)
+		info->send_immediate = false;
 
 	return ret;
 }
@@ -1155,6 +1174,9 @@ static void put_receive_buffer(
 	info->count_receive_buffer++;
 	info->count_put_receive_buffer++;
 	spin_unlock_irqrestore(&info->receive_queue_lock, flags);
+
+	// now we can post new receive credits
+	check_and_send_immediate(info);
 }
 
 static int allocate_receive_buffers(struct cifs_rdma_info *info, int num_buf)
@@ -1199,6 +1221,25 @@ static void destroy_receive_buffers(struct cifs_rdma_info *info)
 	struct cifs_rdma_response *response;
 	while ((response = get_receive_buffer(info)))
 		mempool_free(response, info->response_mempool);
+}
+
+/*
+ * Check and send an immediate or keep alive packet
+ * The condition to send those packets are defined in [MS-SMBD] 3.1.1.1
+ * Connection.KeepaliveRequested and Connection.SendImmediate
+ * The idea is to extend credits to server as soon as it becomes available
+ */
+static void send_immediate_work(struct work_struct *work)
+{
+	struct cifs_rdma_info *info = container_of(
+					work, struct cifs_rdma_info,
+					send_immediate_work.work);
+
+	if (info->keep_alive_requested == KEEP_ALIVE_PENDING ||
+	    info->send_immediate) {
+		log_keep_alive("send an empty message\n");
+		cifs_rdma_post_send_empty(info);
+	}
 }
 
 // Implement idle connection timer [MS-SMBD] 3.1.6.2
@@ -1370,6 +1411,7 @@ struct cifs_rdma_info* cifs_create_rdma_session(
 	init_waitqueue_head(&info->wait_reassembly_queue);
 
 	INIT_DELAYED_WORK(&info->idle_timer_work, idle_connection_timer);
+	INIT_DELAYED_WORK(&info->send_immediate_work, send_immediate_work);
 	schedule_delayed_work(&info->idle_timer_work,
 		info->keep_alive_interval*HZ);
 
