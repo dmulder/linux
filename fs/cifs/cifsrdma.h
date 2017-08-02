@@ -89,6 +89,8 @@ struct cifs_rdma_info {
 
 	// total data length of reassembly queue
 	atomic_t reassembly_data_length;
+	// the offset to first buffer in reassembly queue
+	int first_entry_offset;
 
 	wait_queue_head_t wait_send_queue;
 
@@ -210,5 +212,8 @@ struct cifs_rdma_response {
 struct cifs_rdma_info* cifs_create_rdma_session(
 	struct TCP_Server_Info *server, struct sockaddr *dstaddr);
 
+// SMBDirect interface for carrying upper layer CIFS I/O
+int cifs_rdma_read(
+	struct cifs_rdma_info *rdma, char *buf, unsigned int to_read);
 int cifs_rdma_write(struct cifs_rdma_info *rdma, struct smb_rqst *rqst);
 #endif
